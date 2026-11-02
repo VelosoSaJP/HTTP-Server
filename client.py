@@ -5,7 +5,7 @@ PORT = 65432
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_cliente:
 
-	sock_cliente.connect((HOST, PORT))
+	sock_cliente.connect((HOST, PORT)) #comeca o handshake com o server
 	print(f"Conectado ao servidor em {HOST}:{PORT}")
 
 	while True:
