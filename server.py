@@ -23,7 +23,7 @@ def atender_cliente(conexao, endereco):
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
 
-	servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) #resolve o problema de Adress alreday in use
+	servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) #resolve o problema de Adress alreday in use, mata o TIME_WAIT
 	servidor.bind((HOST, PORT))
 	
 	servidor.listen()
