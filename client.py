@@ -1,4 +1,5 @@
 import socket
+import protocol
 
 HOST = "127.0.0.1"
 PORT = 65432
@@ -9,16 +10,16 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_cliente:
 	print(f"Conectado ao servidor em {HOST}:{PORT}")
 
 	while True:
-		mensagem = input("Digite uma mensagem (ou 'sair' para encerrar): ")
-		if mensagem == "sair":
+		print("\n1 - Chat\n2 - Sair")
+		opcao = input("Escolha uma opção: ")
+
+		if opcao == "1":
+			texto = input("Mensagem: ")
+			protocol.enviar_mensagem(sock_cliente, protocol.Tipo.CHAT_CLIENTE, "", texto)
+
+		elif opcao == "2":
+			protocol.enviar_mensagem(sock_cliente, protocol.Tipo.SAIR, "", "")
 			break
 
-		sock_cliente.sendall(mensagem.encode())
-
-		resposta = sock_cliente.recv(1024)
-		
-		if not resposta:
-			print("Servidor desconectou")
-			break
-
-		print(f"Resposta do servidor: {resposta.decode()}")
+		else:
+			print("Opção inválida")

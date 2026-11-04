@@ -1,24 +1,43 @@
 import socket
 import threading
+import protocol
 
 HOST = "127.0.0.1"
 PORT = 65432
 
+clientes = []
+lock_clientes = threading.Lock()
+
 
 def atender_cliente(conexao, endereco):
 	with conexao:
-		print(f"Conectado: {endereco}")
+		with lock_clientes:
+			clientes.append(conexao)
+			print(f"Conectado: {endereco} ({len(clientes)} clientes)")
 
-		while True:
-			
-			dados = conexao.recv(1024)
-			
-			if not dados:
-				print(f"{endereco} desconectou")
-				break
+		try:
+			while True:
+				tipo, nome, tam_dados = protocol.receber_inicio(conexao)
 
-			print(f"{endereco}: {dados.decode()}")
-			conexao.sendall(dados)
+				if tipo == protocol.Tipo.SAIR:
+					print(f"{endereco} saiu")
+					break
+
+				elif tipo == protocol.Tipo.CHAT_CLIENTE:
+					texto = protocol.receber_bytes(conexao, tam_dados).decode("utf-8")
+					print(f"[{endereco}] {texto}")
+
+				else:
+					print(f"{endereco} mandou uma mensagem inesperada: {tipo.name}")
+					break
+
+		except (ConnectionError, ValueError) as erro:
+			print(f"{endereco} desconectou: {erro}")
+
+		finally:
+			with lock_clientes:
+				clientes.remove(conexao)
+				print(f"{endereco} removido ({len(clientes)} clientes)")
 
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
