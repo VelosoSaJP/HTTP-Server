@@ -7,8 +7,8 @@ Aplicação cliente-servidor sobre TCP com servidor multithread, transferência 
 
 - `server.py`: servidor TCP multithread
 - `client.py`: cliente com menu interativo
-- `tcp.py`: definição do protocolo (tipos de mensagem, cabeçalho e funções de envio/recepção)
-- `arquivos/`: único diretório servido pelo servidor
+- `protocol.py`: definição do protocolo (tipos de mensagem, cabeçalho e funções de envio/recepção)
+- `files/`: único diretório servido pelo servidor
 - `download/`: onde o cliente salva os arquivos baixados
 
 ## Como executar
