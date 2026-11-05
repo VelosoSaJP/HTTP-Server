@@ -86,7 +86,7 @@ def receber_mensagens(sock):
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_cliente:
 
-	sock_cliente.connect((HOST, PORT)) #comeca o handshake com o server
+	sock_cliente.connect((HOST, PORT)) 
 	print(f"Conectado ao servidor em {HOST}:{PORT}")
 
 	leitora = threading.Thread(target=receber_mensagens, args=(sock_cliente,), daemon=True)
