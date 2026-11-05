@@ -1,12 +1,45 @@
 import socket
 import threading
+import os
+import hashlib
 import protocol
 
 HOST = "127.0.0.1"
 PORT = 65432
 
+PASTA_ARQUIVOS = "files"
+
 clientes = {}
 lock_clientes = threading.Lock()
+
+
+def enviar_arquivo(conexao, lock_envio, nome):
+	caminho = os.path.join(PASTA_ARQUIVOS, os.path.basename(nome))
+
+	if not os.path.isfile(caminho):
+		with lock_envio:
+			protocol.enviar_mensagem(conexao, protocol.Tipo.ERRO, nome, "Arquivo não encontrado")
+		return None
+
+	tamanho = os.path.getsize(caminho)
+	hash_sha = hashlib.sha256()
+
+	with lock_envio:
+		protocol.enviar_inicio(conexao, protocol.Tipo.ARQUIVO, nome, tamanho)
+
+		with open(caminho, "rb") as arquivo:
+			while True:
+				bloco = arquivo.read(protocol.TAMANHO_BLOCO)
+
+				if not bloco:
+					break
+
+				hash_sha.update(bloco)
+				conexao.sendall(bloco)
+
+		protocol.enviar_mensagem(conexao, protocol.Tipo.HASH, nome, hash_sha.hexdigest())
+
+	return hash_sha.hexdigest()
 
 
 def broadcast():
@@ -45,6 +78,15 @@ def atender_cliente(conexao, endereco):
 				elif tipo == protocol.Tipo.CHAT_CLIENTE:
 					texto = protocol.receber_bytes(conexao, tam_dados).decode("utf-8")
 					print(f"[{endereco}] {texto}")
+
+				elif tipo == protocol.Tipo.PEDIDO_ARQUIVO:
+					print(f"{endereco} pediu o arquivo '{nome}'")
+					hash_enviado = enviar_arquivo(conexao, lock_envio, nome)
+
+					if hash_enviado is None:
+						print(f"'{nome}' recusado para {endereco}")
+					else:
+						print(f"'{nome}' enviado para {endereco} (SHA-256 {hash_enviado})")
 
 				else:
 					print(f"{endereco} mandou uma mensagem inesperada: {tipo.name}")
