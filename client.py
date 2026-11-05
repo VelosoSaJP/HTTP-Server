@@ -7,7 +7,6 @@ import protocol
 HOST = "127.0.0.1"
 PORT = 65432
 
-PASTA_DOWNLOADS = "downloads"
 
 prompt_atual = ""
 arquivo_pedido = ""
@@ -21,8 +20,9 @@ def perguntar(texto):
 
 
 def receber_arquivo(sock, tamanho):
-	os.makedirs(PASTA_DOWNLOADS, exist_ok=True)
-	caminho = os.path.join(PASTA_DOWNLOADS, os.path.basename(arquivo_pedido))
+	pasta_downloads = "downloads"
+	os.makedirs(pasta_downloads, exist_ok=True)
+	caminho = os.path.join(pasta_downloads, os.path.basename(arquivo_pedido))
 	hash_sha = hashlib.sha256()
 	recebidos = 0
 
@@ -49,7 +49,7 @@ def receber_mensagens(sock):
 			tipo, nome, tam_dados = protocol.receber_cabecalho(sock)
 
 			match tipo:
-				
+
 				case protocol.Tipo.CHAT_SERVIDOR:
 					texto = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
 					print(f"\n[{nome}] {texto}")
