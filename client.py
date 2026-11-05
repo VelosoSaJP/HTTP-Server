@@ -46,36 +46,38 @@ def receber_mensagens(sock):
 
 	try:
 		while True:
-			tipo, nome, tam_dados = protocol.receber_inicio(sock)
+			tipo, nome, tam_dados = protocol.receber_cabecalho(sock)
 
-			if tipo == protocol.Tipo.CHAT_SERVIDOR:
-				texto = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
-				print(f"\n[{nome}] {texto}")
-				print(prompt_atual, end="", flush=True)
+			match tipo:
+				
+				case protocol.Tipo.CHAT_SERVIDOR:
+					texto = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
+					print(f"\n[{nome}] {texto}")
+					print(prompt_atual, end="", flush=True)
 
-			elif tipo == protocol.Tipo.ARQUIVO:
-				hash_local = receber_arquivo(sock, tam_dados)
+				case protocol.Tipo.ARQUIVO:
+					hash_local = receber_arquivo(sock, tam_dados)
 
-			elif tipo == protocol.Tipo.HASH:
-				hash_servidor = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
-				print(f"SHA-256 do servidor: {hash_servidor}")
-				print(f"SHA-256 local:       {hash_local}")
+				case protocol.Tipo.HASH:
+					hash_servidor = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
+					print(f"SHA-256 do servidor: {hash_servidor}")
+					print(f"SHA-256 local:       {hash_local}")
 
-				if hash_servidor == hash_local:
-					print("Integridade OK")
-				else:
-					print("ERRO: os hashes não batem, arquivo corrompido")
+					if hash_servidor == hash_local:
+						print("Integridade OK")
+					else:
+						print("ERRO: os hashes não batem, arquivo corrompido")
 
-				download_concluido.set()
+					download_concluido.set()
 
-			elif tipo == protocol.Tipo.ERRO:
-				texto = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
-				print(f"\nErro ao pedir '{nome}': {texto}")
-				download_concluido.set()
+				case protocol.Tipo.ERRO:
+					texto = protocol.receber_bytes(sock, tam_dados).decode("utf-8")
+					print(f"\nErro ao pedir '{nome}': {texto}")
+					download_concluido.set()
 
-			else:
-				print(f"\nMensagem inesperada do servidor: {tipo.name}")
-				break
+				case _:
+					print(f"\nMensagem inesperada do servidor: {tipo.name}")
+					break
 
 	except (ConnectionError, ValueError):
 		pass
@@ -99,20 +101,21 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_cliente:
 		if not leitora.is_alive():
 			break
 
-		if opcao == "1":
-			arquivo_pedido = perguntar("Nome do arquivo: ")
-			download_concluido.clear()
-			protocol.enviar_mensagem(sock_cliente, protocol.Tipo.PEDIDO_ARQUIVO, arquivo_pedido, "")
-			download_concluido.wait()
+		match opcao:
+			case "1":
+				arquivo_pedido = perguntar("Nome do arquivo: ")
+				download_concluido.clear()
+				protocol.enviar_mensagem(sock_cliente, protocol.Tipo.PEDIDO_ARQUIVO, arquivo_pedido, "")
+				download_concluido.wait()
 
-		elif opcao == "2":
-			texto = perguntar("Mensagem: ")
-			protocol.enviar_mensagem(sock_cliente, protocol.Tipo.CHAT_CLIENTE, "", texto)
+			case "2":
+				texto = perguntar("Mensagem: ")
+				protocol.enviar_mensagem(sock_cliente, protocol.Tipo.CHAT_CLIENTE, "", texto)
 
-		elif opcao == "3":
-			protocol.enviar_mensagem(sock_cliente, protocol.Tipo.SAIR, "", "")
-			leitora.join()
-			break
+			case "3":
+				protocol.enviar_mensagem(sock_cliente, protocol.Tipo.SAIR, "", "")
+				leitora.join()
+				break
 
-		else:
-			print("Opção inválida")
+			case _:
+				print("Opção inválida")

@@ -69,7 +69,7 @@ def atender_cliente(conexao, endereco):
 
 		try:
 			while True:
-				tipo, nome, tam_dados = protocol.receber_inicio(conexao)
+				tipo, nome, tam_dados = protocol.receber_cabecalho(conexao)
 
 				if tipo == protocol.Tipo.SAIR:
 					print(f"{endereco} saiu")

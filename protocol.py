@@ -58,7 +58,7 @@ def enviar_mensagem(sock, tipo, nome, dados):
 	sock.sendall(dados_bytes)
 
 
-def receber_inicio(sock):
+def receber_cabecalho(sock):
 	cabecalho = receber_bytes(sock, TAMANHO_CABECALHO)
 	tipo, tam_nome, tam_dados = ler_cabecalho(cabecalho)
 
