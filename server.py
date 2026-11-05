@@ -7,14 +7,14 @@ import protocol
 HOST = "127.0.0.1"
 PORT = 65432
 
-PASTA_ARQUIVOS = "files"
 
 clientes = {}
 lock_clientes = threading.Lock()
 
 
 def enviar_arquivo(conexao, lock_envio, nome):
-	caminho = os.path.join(PASTA_ARQUIVOS, os.path.basename(nome))
+	pasta_arquivo = "files"
+	caminho = os.path.join(pasta_arquivo, os.path.basename(nome))
 
 	if not os.path.isfile(caminho):
 		with lock_envio:
