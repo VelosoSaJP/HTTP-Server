@@ -9,7 +9,7 @@ Aplicação cliente-servidor sobre TCP com servidor multithread, transferência 
 - `client.py`: cliente com menu interativo
 - `protocol.py`: definição do protocolo (tipos de mensagem, cabeçalho e funções de envio/recepção)
 - `files/`: único diretório servido pelo servidor
-- `download/`: onde o cliente salva os arquivos baixados
+- `downloads/`: onde o cliente salva os arquivos baixados
 
 ## Como executar
 
@@ -18,7 +18,7 @@ Aplicação cliente-servidor sobre TCP com servidor multithread, transferência 
 
 Para gerar um arquivo de teste maior que 10 MB (não versionado):
 
-    dd if=/dev/urandom of=arquivos/grande.bin bs=1M count=20
+    dd if=/dev/urandom of=files/grande.bin bs=1M count=20
 
 ## Protocolo
 
@@ -70,9 +70,9 @@ Formato `!BIQ`, em ordem de rede (big-endian) e sem padding.
 
 **Hash depois do arquivo.** O SHA-256 é calculado durante o envio, lendo o arquivo em blocos de 8 KB, sem carregá-lo inteiro na memória. Como só fica pronto depois do último bloco, vai numa mensagem separada (tipo 3). O cliente calcula o hash da mesma forma enquanto grava e compara os dois no final. O formato hexadecimal facilita a exibição e a comparação.
 
-**Erro único.** Arquivo inexistente e tentativa de acesso fora de `arquivos/` geram a mesma mensagem de erro, para que não seja possível descobrir quais arquivos existem fora do diretório comparando as respostas.
+**Erro único.** Arquivo inexistente e tentativa de acesso fora de `files/` geram a mesma mensagem de erro, para que não seja possível descobrir quais arquivos existem fora do diretório comparando as respostas.
 
-**Nome do arquivo no cliente.** O cliente salva o download com o nome que ele mesmo pediu, e não com o nome recebido do servidor, evitando gravar fora de `download/`.
+**Nome do arquivo no cliente.** O cliente salva o download com o nome que ele mesmo pediu, e não com o nome recebido do servidor, evitando gravar fora de `downloads/`.
 
 **Limite do nome.** Nomes acima de TAMANHO_MAX_NOME bytes são rejeitados, para que um tam_nome enorme não faça o servidor tentar ler e alocar gigabytes.
 
