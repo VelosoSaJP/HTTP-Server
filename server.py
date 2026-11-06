@@ -14,9 +14,9 @@ lock_clientes = threading.Lock()
 
 def enviar_arquivo(conexao, lock_envio, nome):
 	pasta_arquivo = "files"
-	caminho = os.path.join(pasta_arquivo, os.path.basename(nome))
+	caminho = os.path.join(pasta_arquivo, nome)
 
-	if not os.path.isfile(caminho):
+	if os.path.basename(nome) != nome or not os.path.isfile(caminho):
 		with lock_envio:
 			protocol.enviar_mensagem(conexao, protocol.Tipo.ERRO, nome, "Arquivo não encontrado")
 		return None
