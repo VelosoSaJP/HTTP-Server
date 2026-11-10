@@ -45,6 +45,23 @@ def atender_cliente(conexao, endereco):
 		print(f"{endereco} enviou {len(dados)} bytes:")
 		print(repr(dados))
 
+		if not dados:
+			return
+
+		resposta = (
+			"HTTP/1.1 200 OK\r\n"
+			"Content-Type: text/html\r\n"
+			"Content-Length: 113\r\n"
+			"Connection: close\r\n"
+			"\r\n"
+			"<html>\n"
+			" <head><title>Resposta Sucesso</title></head>\n"
+			" <body><h1>Arquivo entregue com sucesso!</h1></body>\n"
+			"</html>"
+		)
+
+		conexao.sendall(resposta.encode("utf-8"))
+
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
 
