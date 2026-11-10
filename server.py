@@ -5,7 +5,7 @@ import hashlib
 import protocol
 
 HOST = "127.0.0.1"
-PORT = 65432
+PORT = 8080
 
 
 def enviar_arquivo(conexao, nome):
@@ -40,29 +40,10 @@ def atender_cliente(conexao, endereco):
 	with conexao:
 		print(f"Conectado: {endereco}")
 
-		try:
-			while True:
-				tipo, nome, tam_dados = protocol.receber_cabecalho(conexao)
+		dados = conexao.recv(1024)
 
-				if tipo == protocol.Tipo.SAIR:
-					print(f"{endereco} saiu")
-					break
-
-				elif tipo == protocol.Tipo.PEDIDO_ARQUIVO:
-					print(f"{endereco} pediu o arquivo '{nome}'")
-					hash_enviado = enviar_arquivo(conexao, nome)
-
-					if hash_enviado is None:
-						print(f"'{nome}' recusado para {endereco}")
-					else:
-						print(f"'{nome}' enviado para {endereco} (SHA-256 {hash_enviado})")
-
-				else:
-					print(f"{endereco} mandou uma mensagem inesperada: {tipo.name}")
-					break
-
-		except (ConnectionError, ValueError) as erro:
-			print(f"{endereco} desconectou: {erro}")
+		print(f"{endereco} enviou {len(dados)} bytes:")
+		print(repr(dados))
 
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
