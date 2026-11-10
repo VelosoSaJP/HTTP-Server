@@ -1,133 +1,145 @@
-# Transferência de Arquivos e Chat sobre TCP
+# Servidor Web HTTP Multithread
 
-Trabalho 2 da disciplina de Redes de Computadores (ICSR30), do Prof. Mauro Fonseca (UTFPR, DAINF).
+Trabalho 3 da disciplina de Redes de Computadores (ICSR30), do Prof. Mauro Fonseca (UTFPR, DAINF).
 
-Aplicação cliente-servidor sobre TCP com servidor multithread, transferência de arquivos com verificação de integridade (SHA-256) e chat.
+Servidor HTTP simplificado sobre TCP, construído a partir do servidor multithread do Trabalho 2. O cliente é o navegador: o servidor interpreta a requisição HTTP, responde com o cabeçalho correto e envia o arquivo pedido, tratando várias conexões ao mesmo tempo, arquivos binários e situações de erro.
 
 ## Estrutura
 
-- `server.py`: servidor TCP multithread
-- `client.py`: cliente com menu interativo
-- `protocol.py`: definição do protocolo (tipos de mensagem, cabeçalho e funções de envio/recepção)
-- `files/`: único diretório servido pelo servidor
-- `downloads/`: onde o cliente salva os arquivos baixados
+- `server.py`: socket TCP, loop do `accept`, uma thread por conexão e envio dos arquivos
+- `protocol.py`: o protocolo HTTP (leitura da requisição, parsing, montagem do cabeçalho e tabela de tipos MIME)
+- `files/`: pasta raiz do site, único diretório servido pelo servidor
 
 ## Como executar
 
-Requer Python 3.10 ou mais novo, por causa do `match/case`. Os dois programas devem ser executados de dentro da pasta do projeto, pois `files/` e `downloads/` são caminhos relativos ao diretório atual.
+O servidor deve ser executado de dentro da pasta do projeto, pois `files/` é um caminho relativo ao diretório atual.
 
     python3 server.py
-    python3 client.py
 
-No console do servidor, qualquer linha digitada é enviada como chat para todos os clientes conectados.
-
-Para gerar um arquivo de teste maior que 10 MB (não versionado):
-
-    dd if=/dev/urandom of=files/grande.bin bs=1M count=20
+Depois, abrir no navegador `http://127.0.0.1:8080/`.
 
 ## Protocolo
 
-O TCP entrega um fluxo de bytes e não preserva os limites entre os envios. Por isso, toda mensagem segue o formato:
+O servidor fala HTTP/1.1 com uma requisição por conexão. Tanto a requisição quanto a resposta seguem a mesma estrutura:
 
-| Parte     | Tamanho                  | Conteúdo                                     |
-|-----------|--------------------------|----------------------------------------------|
-| Cabeçalho | 13 bytes (fixo)          | tipo, tam_nome, tam_dados                    |
-| Nome      | tam_nome bytes           | nome do arquivo ou do remetente              |
-| Dados     | tam_dados bytes          | bytes do arquivo, texto do chat, hash, erro  |
+| Parte | Formato |
+|-------|---------|
+| Primeira linha | linha de requisição (`GET /index.html HTTP/1.1`) ou de status (`HTTP/1.1 200 OK`), terminada em `\r\n` |
+| Cabeçalhos | um `Nome: valor` por linha, cada uma terminada em `\r\n` |
+| Linha em branco | `\r\n`, que junto com o fim da última linha forma o `\r\n\r\n` |
+| Corpo | exatamente `Content-Length` bytes |
 
-### Cabeçalho
+### Resposta
 
-| Campo     | Tamanho | Formato struct |
-|-----------|---------|----------------|
-| tipo      | 1 byte  | B              |
-| tam_nome  | 4 bytes | I              |
-| tam_dados | 8 bytes | Q              |
+    HTTP/1.1 200 OK
+    Date: Tue, 10 Nov 2026 20:00:00 GMT
+    Server: ServidorRedes/1.0
+    Content-Type: text/html; charset=utf-8
+    Content-Length: 237
+    Connection: close
 
-Formato `!BIQ`, em ordem de rede (big-endian) e sem padding.
+    (237 bytes do arquivo)
 
-### Tipos de mensagem
+### Códigos de status
 
-| tipo | Mensagem          | Quem envia | Nome                       | Dados                      |
-|------|-------------------|------------|----------------------------|----------------------------|
-| 1    | Pedido de arquivo | Cliente    | nome do arquivo pedido     | vazio                      |
-| 2    | Arquivo           | Servidor   | nome do arquivo            | todos os bytes do arquivo  |
-| 3    | Hash              | Servidor   | nome do arquivo            | SHA-256 em hexadecimal     |
-| 4    | Erro              | Servidor   | nome do arquivo que falhou | descrição do erro          |
-| 5    | Chat do cliente   | Cliente    | vazio                      | texto da mensagem          |
-| 6    | Chat do servidor  | Servidor   | remetente                  | texto da mensagem          |
-| 7    | Sair              | Cliente    | vazio                      | vazio                      |
+| Código | Quando | Corpo |
+|--------|--------|-------|
+| 200 OK | arquivo encontrado | o arquivo |
+| 400 Bad Request | linha de requisição malformada ou cabeçalho maior que o limite | HTML gerado no código |
+| 403 Forbidden | caminho com diretório (tentativa de sair da pasta raiz) | HTML gerado no código |
+| 404 Not Found | arquivo inexistente ou que não é um arquivo regular | `files/404.html` |
+| 501 Not Implemented | método diferente de GET | HTML gerado no código |
 
-### Sequências
+### Tipos MIME
 
-- Download com sucesso: 1 → 2 → 3
-- Download com falha: 1 → 4
-- Chat do servidor: 6, a qualquer momento fora de um download (nunca entre o 2 e o 3)
-- Chat do cliente: 5, exibido apenas no console do servidor
-- Encerramento: 7, o servidor fecha a conexão e o cliente termina ao detectar o fechamento
+| Extensão | Content-Type |
+|----------|--------------|
+| `.html` | `text/html; charset=utf-8` |
+| `.txt` | `text/plain; charset=utf-8` |
+| `.jpg`, `.jpeg` | `image/jpeg` |
+| `.png` | `image/png` |
+| `.ico` | `image/x-icon` |
+| outras | `application/octet-stream` |
 
-### Fluxo de uma transferência
+### Fluxo de uma requisição
 
 ```
-Cliente                            Servidor (accept)           Thread do cliente
+Navegador                          Servidor (accept)           Thread da conexão
    |--- connect (handshake TCP) ------>|                               |
    |                                   |-- cria thread com o socket -->|
    |                                   |   da conexão                  |
-   |--- 1 PEDIDO_ARQUIVO "grande.bin" -------------------------------->|  valida o nome e
-   |                                                                   |  a existência
-   |<------------------------------------ 2 ARQUIVO (tam_dados = N) ---|
-   |<------------------------------------ N bytes, em blocos de 8 KB --|  SHA-256 atualizado
-   |   grava e calcula o SHA-256 local                                 |  a cada bloco
-   |<------------------------------------ 3 HASH "sha256 em hex" ------|
-   |   compara os dois hashes                                          |
-   |                                ...                                |
-   |--- 7 SAIR ------------------------------------------------------->|
-   |<------------------------------------ fecha a conexão -------------|
+   |--- GET /index.html HTTP/1.1 ... \r\n\r\n ------------------------>|  lê até o \r\n\r\n,
+   |                                                                   |  valida e procura
+   |                                                                   |  o arquivo
+   |<------------------------------- HTTP/1.1 200 OK ... \r\n\r\n -----|
+   |<------------------------------- N bytes, em blocos de 8 KB -------|
+   |<------------------------------- fecha a conexão ------------------|
 ```
 
-Todas as mensagens trafegam pelo mesmo socket da conexão. Se o nome tiver caminho ou o arquivo não existir, a thread responde com 4 ERRO em vez do 2, e o cliente mostra a mensagem ao usuário. Um chat do servidor (6) pode chegar antes do 2 ou depois do 3, mas nunca no meio da transferência.
+Ao receber o HTML, o navegador pede os outros recursos da página (imagens e o `favicon.ico`), cada um na sua própria conexão.
 
 ## Decisões de projeto
 
-**Framing por tamanho.** O receptor sempre lê primeiro os 13 bytes do cabeçalho e, com eles, sabe exatamente quantos bytes de nome e de dados vêm em seguida. Não foi usado delimitador porque o conteúdo poderia conter o próprio delimitador e o receptor teria que procurá-lo byte a byte.
+### Leitura da requisição
 
-**tam_dados com 8 bytes.** O arquivo inteiro vai em uma única mensagem, então tam_dados é o tamanho do arquivo. Com 4 bytes o limite seria de cerca de 4 GB; com 8 bytes não há limite prático, ao custo de 4 bytes a mais por mensagem.
+**Leitura até o delimitador.** O TCP não preserva os limites das mensagens, então uma requisição pode chegar em vários `recv`. A thread acumula os bytes recebidos num buffer até encontrar `\r\n\r\n`, o fim dos cabeçalhos. O corpo da requisição não é lido, porque o servidor só aceita GET, que não tem corpo.
 
-**Arquivo em uma única mensagem.** Simplifica o protocolo e o cliente, que recebe o arquivo num único loop. Em troca, enquanto um arquivo está sendo enviado nenhuma outra mensagem pode entrar na conexão, então um chat do servidor para aquele cliente espera o fim da transferência.
+**Delimitador e tamanho juntos.** O HTTP usa delimitador nos cabeçalhos e tamanho no corpo. O problema de o conteúdo conter o próprio delimitador não aparece aqui: o `\r\n\r\n` só é procurado nos cabeçalhos, que são texto e não podem contê-lo antes do fim. O corpo, que pode conter qualquer byte, nunca é varrido em busca dele, pois seu fim é dado pelo `Content-Length`.
 
-**Hash depois do arquivo.** O SHA-256 é calculado durante o envio, lendo o arquivo em blocos de 8 KB, sem carregá-lo inteiro na memória. Como só fica pronto depois do último bloco, vai numa mensagem separada (tipo 3). O cliente calcula o hash da mesma forma enquanto grava e compara os dois no final. O formato hexadecimal facilita a exibição e a comparação.
+**Limite de 8 KB nos cabeçalhos.** Sem limite, um cliente poderia enviar bytes indefinidamente sem nunca mandar o `\r\n\r\n` e fazer o buffer crescer até esgotar a memória. Se o limite estourar, a resposta é 400. Um navegador comum envia menos de 1 KB.
 
-**Sanitização do nome.** O servidor só aceita um nome de arquivo puro, sem nenhum diretório. A verificação é `os.path.basename(nome) != nome`: se remover o caminho altera o nome, o pedido continha alguma barra (`../`, `/etc/`, `files/`) e é recusado. O nome não é reescrito para o `basename`, porque assim `../foto.png` acabaria servindo `files/foto.png` e pareceria que o acesso fora da pasta funcionou. Em seguida, `os.path.isfile` confirma que o arquivo existe e não é um diretório, o que também barra `..` e o nome vazio. Como consequência, subpastas dentro de `files/` não são servidas, o que não é necessário neste trabalho.
+**Timeout de 5 segundos.** O Chrome abre conexões especulativas que muitas vezes não enviam nada. Sem timeout, cada uma prenderia uma thread parada no `recv`. Quem não completa a requisição dentro do prazo tem a conexão fechada sem resposta. O mesmo vale para um cliente que fecha a conexão antes do `\r\n\r\n`.
 
-**Erro único.** Arquivo inexistente e nome com caminho geram a mesma mensagem de erro, para que não seja possível descobrir quais arquivos existem fora do diretório comparando as respostas.
+### Parsing
 
-**Nome do arquivo no cliente.** O cliente salva o download com o nome que ele mesmo pediu, e não com o nome recebido do servidor, evitando gravar fora de `downloads/`.
+**Só a linha de requisição importa.** Ela é dividida por espaços e precisa ter exatamente três partes: método, caminho e versão, com a versão começando por `HTTP/`. Qualquer outra forma gera 400. Os demais cabeçalhos são ignorados, porque nenhum deles é necessário para servir um arquivo.
 
-**Limite do nome.** Nomes acima de TAMANHO_MAX_NOME bytes são rejeitados, para que um tam_nome enorme não faça o servidor tentar ler e alocar gigabytes.
+**Decodificação em latin-1.** Os bytes do cabeçalho são convertidos para texto com latin-1, que associa cada byte a um caractere e nunca falha. Uma requisição com bytes inválidos é tratada como malformada, e não derruba a thread com um erro de decodificação.
+
+**501 para outros métodos.** O servidor só implementa GET. O 405 indicaria que o método existe no servidor mas não vale para aquele recurso, e exigiria o cabeçalho `Allow`. O 501 descreve melhor um método que o servidor não implementa em lugar nenhum.
+
+### Tratamento do caminho
+
+**Normalização.** O caminho precisa começar com `/`. A query string é descartada (`/foto.png?v=2` vira `/foto.png`), a barra inicial é removida e o caminho vazio, que corresponde a `/`, é mapeado para `index.html`.
+
+**Sanitização.** É a mesma verificação do Trabalho 2: `os.path.basename(nome) != nome`. Se remover o caminho altera o nome, o pedido continha alguma barra (`../`, `/etc/`, `//`) e é recusado com 403. O nome não é reescrito para o `basename`, porque assim `../index.html` acabaria servindo `files/index.html` e pareceria que o acesso fora da pasta funcionou. Em seguida, `os.path.isfile` confirma que o arquivo existe e não é um diretório, o que também barra `..` e gera 404. Como consequência, subpastas dentro de `files/` não são servidas, o que não é necessário neste trabalho.
+
+**403 e 404 separados.** No Trabalho 2, nome com caminho e arquivo inexistente geravam o mesmo erro, para não revelar o que existe fora da pasta. Aqui eles são separados para deixar o bloqueio visível, e isso continua sem revelar nada: o 403 é decidido só pelo formato do nome, antes de qualquer acesso ao disco. Um pedido de `../../etc/passwd` recebe 403 exista o arquivo ou não.
+
+**Percent-encoding não é decodificado.** Sequências como `%20` e `%2e` são mantidas como texto literal. Se o caminho fosse decodificado, isso teria que acontecer antes da sanitização: decodificando depois, `%2e%2e%2f` passaria pela verificação e só então viraria `../`. Sem decodificar, `%2e%2e%2fetc%2fpasswd` não contém barra, passa pela verificação e simplesmente não existe como arquivo, gerando 404. O custo é não servir arquivos com espaço ou acento no nome, e o site não tem nenhum.
+
+**Navegador e path traversal.** O navegador normaliza `../` (e também `%2e%2e`) antes de enviar o pedido, então digitar `/../../etc/passwd` na barra de endereços envia `/etc/passwd`. Para que o ataque chegue ao servidor como foi escrito, os testes usam `curl --path-as-is` ou `nc`.
+
+### Montagem da resposta
+
+**Cabeçalhos.** A resposta leva a linha de status, `Date`, `Server`, `Content-Type`, `Content-Length` e `Connection: close`, seguidos da linha em branco. A data é gerada no formato do HTTP, sempre em GMT.
+
+**Content-Type pela extensão.** A extensão do arquivo é procurada numa tabela própria (um dicionário). Uma extensão desconhecida recebe `application/octet-stream`, que faz o navegador baixar o arquivo em vez de tentar exibi-lo.
+
+**charset=utf-8 nos tipos de texto.** As páginas não declaram a codificação com `<meta charset>`. Sem o charset no cabeçalho, o navegador pode adivinhar outra codificação e exibir "você" como "vocÃª".
+
+**Content-Length em bytes.** Para arquivos, o valor vem de `os.path.getsize`, que já é o tamanho em bytes no disco. Para as páginas de erro geradas no código, vem do `len` depois do `.encode()`. O `len` de uma string conta caracteres, e um caractere acentuado ocupa 2 bytes em UTF-8.
+
+### Texto e binário
+
+**Um caminho só para todos os arquivos.** Todo arquivo é aberto em modo binário (`"rb"`) e enviado em blocos de 8 KB, exatamente como está no disco. O servidor nunca decodifica o conteúdo: para ele, HTML, JPEG e PNG são apenas bytes, e quem os interpreta é o navegador, guiado pelo `Content-Type`.
+
+**Onde existe texto.** Texto de verdade só aparece no que o próprio servidor escreve: o cabeçalho da resposta e as páginas de erro geradas no código. Eles são montados como string e convertidos para bytes com `.encode()` antes do envio.
+
+**Por que não modo texto.** Ler uma imagem em modo texto faria o Python decodificá-la como UTF-8, o que gera `UnicodeDecodeError` ou troca bytes inválidos por caracteres de substituição. No Windows, o modo texto ainda converte `\n` em `\r\n`. Nos dois casos os bytes enviados deixariam de ser os do arquivo, a imagem chegaria corrompida e o tamanho deixaria de bater com o `Content-Length`.
+
+**Leitura em blocos.** O arquivo não é carregado inteiro na memória, então o consumo é o mesmo para uma página de 200 bytes ou uma imagem de 20 MB.
+
+### Conexão
+
+**Connection: close.** Cada conexão atende uma única requisição, e o servidor fecha o socket depois de enviar a resposta. Isso evita controlar o fim de uma requisição e o início da próxima no mesmo socket. O `Content-Length` continua sendo enviado, como exige a especificação, e permite ao navegador saber se recebeu o corpo inteiro.
 
 **SO_REUSEADDR.** Permite reiniciar o servidor logo após derrubá-lo, sem esperar as conexões antigas saírem do estado TIME_WAIT.
 
 ## Concorrência
 
-### Servidor
+**Uma thread por conexão.** O loop principal só faz `accept` e entrega o socket da conexão para uma thread nova, que roda `atender_cliente`. O estado da conexão (o socket, o endereço e o buffer da requisição) fica nas variáveis locais dessa thread. Uma requisição malformada ou uma desconexão encerram apenas a thread daquela conexão.
 
-**Uma thread por cliente.** O loop principal só faz `accept` e entrega o socket da conexão para uma thread nova, que roda `atender_cliente`. O estado de cada conexão (o socket, o endereço e o lock de envio) fica nas variáveis locais dessa thread. Um erro ou desconexão encerra apenas a thread daquele cliente.
+**Sem estado compartilhado.** No Trabalho 2, a lista de clientes e o broadcast exigiam locks. Aqui as threads não compartilham nada além da pasta `files/`, que só é lida, então não há lock.
 
-**Lista de clientes com lock.** O dicionário `clientes` guarda cada conexão ativa e é usado pelo broadcast. Ele é compartilhado entre todas as threads, então toda inclusão e remoção acontece dentro de `lock_clientes`. A remoção fica num `finally`, para que o cliente saia da lista em qualquer forma de encerramento, inclusive quando o processo do cliente é morto.
-
-**Lock de envio por conexão.** Duas threads podem escrever no mesmo socket: a do cliente, enviando um arquivo, e a do broadcast. Sem controle, os bytes de um chat poderiam cair no meio dos bytes do arquivo e quebrar o framing. Cada conexão tem um `lock_envio`, e cada mensagem é enviada inteira com ele seguro. No download, o lock é mantido do início do arquivo até o envio do hash. Isso implementa a decisão de enviar o arquivo em uma única mensagem.
-
-**Broadcast fora do lock da lista.** A thread de broadcast lê uma linha do console, copia a lista de clientes dentro de `lock_clientes` e só depois envia, já fora dele. Se o envio acontecesse com a lista travada, um broadcast esperando o fim de um download bloquearia a entrada e a saída de todos os outros clientes. Um cliente que caia entre a cópia e o envio gera um `OSError`, que é ignorado.
-
-**Dois locks diferentes.** `lock_clientes` protege a lista de quem está conectado; `lock_envio` protege a escrita em cada socket.
-
-### Cliente
-
-**Duas threads.** A thread principal lê o teclado e envia comandos. Uma segunda thread fica bloqueada em `recv` e trata tudo o que chega do servidor. Com isso, um chat do servidor aparece mesmo enquanto a thread principal está parada no `input()`.
-
-**Uma única thread lê o socket.** Se as duas threads chamassem `recv`, cada uma poderia ficar com um pedaço do mesmo frame. Por isso a thread leitora recebe todas as mensagens, inclusive os bytes do arquivo, e decide o que fazer pelo tipo.
-
-**Prompt reimpresso.** Quando um chat chega, a linha do `input()` é sobrescrita. A thread leitora reimprime o último prompt mostrado, guardado em `prompt_atual`.
-
-**Menu bloqueado durante o download.** Depois de pedir um arquivo, a thread principal espera um `threading.Event` até a thread leitora receber o hash ou o erro. Isso evita que o menu seja impresso no meio da saída do download e que um segundo pedido troque o nome do arquivo que ainda está sendo gravado. A thread leitora também libera esse evento se a conexão cair, para que a thread principal não fique presa.
-
-**Encerramento.** Ao escolher Sair, o cliente envia a mensagem 7 e espera a thread leitora terminar com `join`. O servidor fecha a conexão, o `recv` da thread leitora retorna vazio e ela termina. O socket só é fechado depois disso, para não ser fechado enquanto outra thread ainda está bloqueada nele.
+**Concorrência do navegador.** Para montar uma página, o navegador abre várias conexões em paralelo, uma para cada recurso. Cada uma é atendida por uma thread diferente, e uma transferência lenta não impede que as outras terminem.
