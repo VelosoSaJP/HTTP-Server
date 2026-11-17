@@ -45,10 +45,9 @@ O servidor fala HTTP/1.1 com uma requisição por conexão. Tanto a requisição
 | Código | Quando | Corpo |
 |--------|--------|-------|
 | 200 OK | arquivo encontrado | o arquivo |
-| 400 Bad Request | linha de requisição malformada ou cabeçalho maior que o limite | HTML gerado no código |
+| 400 Bad Request | linha de requisição malformada, método diferente de GET ou cabeçalho maior que o limite | HTML gerado no código |
 | 403 Forbidden | caminho com diretório (tentativa de sair da pasta raiz) | HTML gerado no código |
 | 404 Not Found | arquivo inexistente ou que não é um arquivo regular | `files/404.html` |
-| 501 Not Implemented | método diferente de GET | HTML gerado no código |
 
 ### Tipos MIME
 
@@ -96,7 +95,7 @@ Ao receber o HTML, o navegador pede os outros recursos da página (imagens e o `
 
 **Decodificação em latin-1.** Os bytes do cabeçalho são convertidos para texto com latin-1, que associa cada byte a um caractere e nunca falha. Uma requisição com bytes inválidos é tratada como malformada, e não derruba a thread com um erro de decodificação.
 
-**501 para outros métodos.** O servidor só implementa GET. O 405 indicaria que o método existe no servidor mas não vale para aquele recurso, e exigiria o cabeçalho `Allow`. O 501 descreve melhor um método que o servidor não implementa em lugar nenhum.
+**400 para outros métodos.** O servidor só implementa GET, e qualquer outro método é tratado como requisição inválida, junto com as linhas malformadas. Isso mantém um único caminho de erro para tudo o que o servidor não aceita na linha de requisição.
 
 ### Tratamento do caminho
 

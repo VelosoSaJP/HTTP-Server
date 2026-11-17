@@ -11,7 +11,6 @@ FRASES_STATUS = {
 	400: "Bad Request",
 	403: "Forbidden",
 	404: "Not Found",
-	501: "Not Implemented",
 }
 
 
@@ -45,6 +44,9 @@ def interpretar_requisicao(cabecalho):
 
 	if not versao.startswith("HTTP/") or not caminho.startswith("/"):
 		raise ValueError(f"Linha de requisição malformada: {linha!r}")
+
+	if metodo != "GET":
+		raise ValueError(f"Método não suportado: {metodo}")
 
 	return metodo, caminho, versao
 

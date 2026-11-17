@@ -55,11 +55,6 @@ def atender_cliente(conexao, endereco):
 
 		print(f"{endereco} {metodo} {caminho} {versao}")
 
-		if metodo != "GET":
-			print(f"{endereco} 501: método {metodo} não implementado")
-			protocol.enviar_erro(conexao, 501)
-			return
-
 		corpo = (
 			"<html>\n"
 			" <head><title>Resposta Sucesso</title></head>\n"
