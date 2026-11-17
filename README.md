@@ -16,7 +16,9 @@ O servidor deve ser executado de dentro da pasta do projeto, pois `files/` é um
 
     python3 server.py
 
-Depois, abrir no navegador `http://127.0.0.1:8080/`.
+Depois, abrir no navegador `http://127.0.0.1:8080/`. O servidor escuta apenas em `127.0.0.1`, então só aceita conexões da própria máquina.
+
+As imagens usadas nos testes não são versionadas. Para testar o envio de JPEG e PNG, basta colocar os arquivos em `files/` e abri-los pelo nome, por exemplo `http://127.0.0.1:8080/foto.jpg`.
 
 ## Protocolo
 
@@ -47,7 +49,7 @@ O servidor fala HTTP/1.1 com uma requisição por conexão. Tanto a requisição
 | 200 OK | arquivo encontrado | o arquivo |
 | 400 Bad Request | linha de requisição malformada, método diferente de GET ou cabeçalho maior que o limite | HTML gerado no código |
 | 403 Forbidden | caminho com diretório (tentativa de sair da pasta raiz) | HTML gerado no código |
-| 404 Not Found | arquivo inexistente ou que não é um arquivo regular | `files/404.html` |
+| 404 Not Found | arquivo inexistente ou que não é um arquivo regular | `files/404.html` (ou HTML gerado no código, se a página não existir) |
 
 ### Tipos MIME
 
@@ -87,7 +89,7 @@ Ao receber o HTML, o navegador pede os outros recursos da página (imagens e o `
 
 **Limite de 8 KB nos cabeçalhos.** Sem limite, um cliente poderia enviar bytes indefinidamente sem nunca mandar o `\r\n\r\n` e fazer o buffer crescer até esgotar a memória. Se o limite estourar, a resposta é 400. Um navegador comum envia menos de 1 KB.
 
-**Timeout de 5 segundos.** O Chrome abre conexões especulativas que muitas vezes não enviam nada. Sem timeout, cada uma prenderia uma thread parada no `recv`. Quem não completa a requisição dentro do prazo tem a conexão fechada sem resposta. O mesmo vale para um cliente que fecha a conexão antes do `\r\n\r\n`.
+**Timeout de 5 segundos.** Os navegadores, principalmente o Chrome, abrem conexões especulativas que muitas vezes não enviam nada. Sem timeout, cada uma prenderia uma thread parada no `recv`. Quem não completa a requisição dentro do prazo tem a conexão fechada sem resposta. O mesmo vale para um cliente que fecha a conexão antes do `\r\n\r\n`.
 
 ### Parsing
 
@@ -121,7 +123,7 @@ Ao receber o HTML, o navegador pede os outros recursos da página (imagens e o `
 
 ### Texto e binário
 
-**Um caminho só para todos os arquivos.** Todo arquivo é aberto em modo binário (`"rb"`) e enviado em blocos de 8 KB, exatamente como está no disco. O servidor nunca decodifica o conteúdo: para ele, HTML, JPEG e PNG são apenas bytes, e quem os interpreta é o navegador, guiado pelo `Content-Type`.
+**Um caminho só para todos os arquivos.** Todo arquivo é aberto em modo binário (`"rb"`) e enviado em blocos de 8 KB, exatamente como está no disco, pela função `transmitir_arquivo`. A página de 404 também passa por ela, apenas com outro status. O servidor nunca decodifica o conteúdo: para ele, HTML, JPEG e PNG são apenas bytes, e quem os interpreta é o navegador, guiado pelo `Content-Type`.
 
 **Onde existe texto.** Texto de verdade só aparece no que o próprio servidor escreve: o cabeçalho da resposta e as páginas de erro geradas no código. Eles são montados como string e convertidos para bytes com `.encode()` antes do envio.
 
@@ -139,6 +141,8 @@ Ao receber o HTML, o navegador pede os outros recursos da página (imagens e o `
 
 **Uma thread por conexão.** O loop principal só faz `accept` e entrega o socket da conexão para uma thread nova, que roda `atender_cliente`. O estado da conexão (o socket, o endereço e o buffer da requisição) fica nas variáveis locais dessa thread. Uma requisição malformada ou uma desconexão encerram apenas a thread daquela conexão.
 
-**Sem estado compartilhado.** No Trabalho 2, a lista de clientes e o broadcast exigiam locks. Aqui as threads não compartilham nada além da pasta `files/`, que só é lida, então não há lock.
+**Sem estado compartilhado.** No Trabalho 2, a lista de clientes e o broadcast exigiam locks. Aqui as threads não compartilham nada além da pasta `files/`, que só é lida, então não há lock. O contador usado para numerar as threads só é alterado pelo loop principal.
+
+**Log por thread.** Cada thread recebe um nome (`Thread-1`, `Thread-2`, ...) ao ser criada, e toda linha do log traz o horário e o nome da thread que a escreveu. Com isso, é possível ver no terminal uma transferência lenta começar, outras requisições serem atendidas enquanto ela acontece e a lenta terminar depois.
 
 **Concorrência do navegador.** Para montar uma página, o navegador abre várias conexões em paralelo, uma para cada recurso. Cada uma é atendida por uma thread diferente, e uma transferência lenta não impede que as outras terminem.
