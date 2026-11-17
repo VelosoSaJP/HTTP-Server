@@ -38,29 +38,36 @@ def enviar_arquivo(conexao, nome):
 
 def atender_cliente(conexao, endereco):
 	with conexao:
-		print(f"Conectado: {endereco}")
+		conexao.settimeout(protocol.TIMEOUT)
 
-		dados = conexao.recv(1024)
+		try:
+			cabecalho = protocol.receber_requisicao(conexao)
+			metodo, caminho, versao = protocol.interpretar_requisicao(cabecalho)
 
-		print(f"{endereco} enviou {len(dados)} bytes:")
-		print(repr(dados))
-
-		if not dados:
+		except (ConnectionError, TimeoutError):
+			print(f"{endereco} fechou sem enviar uma requisição")
 			return
 
-		resposta = (
-			"HTTP/1.1 200 OK\r\n"
-			"Content-Type: text/html\r\n"
-			"Content-Length: 113\r\n"
-			"Connection: close\r\n"
-			"\r\n"
+		except ValueError as erro:
+			print(f"{endereco} 400: {erro}")
+			protocol.enviar_erro(conexao, 400)
+			return
+
+		print(f"{endereco} {metodo} {caminho} {versao}")
+
+		if metodo != "GET":
+			print(f"{endereco} 501: método {metodo} não implementado")
+			protocol.enviar_erro(conexao, 501)
+			return
+
+		corpo = (
 			"<html>\n"
 			" <head><title>Resposta Sucesso</title></head>\n"
 			" <body><h1>Arquivo entregue com sucesso!</h1></body>\n"
 			"</html>"
-		)
+		).encode("utf-8")
 
-		conexao.sendall(resposta.encode("utf-8"))
+		conexao.sendall(protocol.montar_cabecalho(200, "text/html; charset=utf-8", len(corpo)) + corpo)
 
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
