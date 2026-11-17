@@ -1,10 +1,18 @@
 import socket
 import threading
 import os
+import time
 import protocol
 
 HOST = "127.0.0.1"
 PORT = 8080
+
+
+def registrar(endereco, mensagem):
+	horario = time.strftime("%H:%M:%S")
+	nome_thread = threading.current_thread().name
+
+	print(f"{horario} [{nome_thread}] {endereco} {mensagem}")
 
 
 def transmitir_arquivo(conexao, status, caminho):
@@ -54,24 +62,24 @@ def atender_cliente(conexao, endereco):
 			metodo, caminho, versao = protocol.interpretar_requisicao(cabecalho)
 
 		except (ConnectionError, TimeoutError):
-			print(f"{endereco} fechou sem enviar uma requisição")
+			registrar(endereco, "fechou sem enviar uma requisição")
 			return
 
 		except ValueError as erro:
-			print(f"{endereco} 400: {erro}")
+			registrar(endereco, f"400: {erro}")
 			protocol.enviar_erro(conexao, 400)
 			return
 
-		print(f"{endereco} {metodo} {caminho} {versao}")
+		registrar(endereco, f"{metodo} {caminho} {versao}")
 
 		nome = protocol.extrair_nome(caminho)
 
 		try:
 			status = enviar_arquivo(conexao, nome)
-			print(f"{endereco} {status} {protocol.FRASES_STATUS[status]}: {nome}")
+			registrar(endereco, f"{status} {protocol.FRASES_STATUS[status]}: {nome}")
 
 		except (ConnectionError, TimeoutError):
-			print(f"{endereco} desconectou durante o envio de {nome}")
+			registrar(endereco, f"desconectou durante o envio de {nome}")
 
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
@@ -82,8 +90,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
 	servidor.listen()
 	print(f"Server escutando em {HOST}:{PORT} e aguardando conexões...")
 
+	numero_conexao = 0
+
 	while True:
 		conexao, endereco = servidor.accept()
+		numero_conexao += 1
 
-		thread = threading.Thread(target=atender_cliente, args=(conexao, endereco), daemon=True)
+		thread = threading.Thread(target=atender_cliente, args=(conexao, endereco), name=f"Thread-{numero_conexao}", daemon=True)
 		thread.start()
