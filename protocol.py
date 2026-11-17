@@ -1,3 +1,4 @@
+import os
 import time
 
 
@@ -12,6 +13,17 @@ FRASES_STATUS = {
 	403: "Forbidden",
 	404: "Not Found",
 }
+
+TIPOS_MIME = {
+	".html": "text/html; charset=utf-8",
+	".txt": "text/plain; charset=utf-8",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png": "image/png",
+	".ico": "image/x-icon",
+}
+
+TIPO_PADRAO = "application/octet-stream"
 
 
 def receber_requisicao(sock):
@@ -49,6 +61,21 @@ def interpretar_requisicao(cabecalho):
 		raise ValueError(f"Método não suportado: {metodo}")
 
 	return metodo, caminho, versao
+
+
+def extrair_nome(caminho):
+	nome = caminho.split("?", 1)[0][1:]
+
+	if nome == "":
+		return "index.html"
+
+	return nome
+
+
+def tipo_mime(nome):
+	extensao = os.path.splitext(nome)[1].lower()
+
+	return TIPOS_MIME.get(extensao, TIPO_PADRAO)
 
 
 def montar_cabecalho(status, tipo, tamanho):

@@ -1,7 +1,6 @@
 import socket
 import threading
 import os
-import hashlib
 import protocol
 
 HOST = "127.0.0.1"
@@ -12,14 +11,17 @@ def enviar_arquivo(conexao, nome):
 	pasta_arquivo = "files"
 	caminho = os.path.join(pasta_arquivo, nome)
 
-	if os.path.basename(nome) != nome or not os.path.isfile(caminho):
-		protocol.enviar_mensagem(conexao, protocol.Tipo.ERRO, nome, "Arquivo não encontrado")
-		return None
+	if os.path.basename(nome) != nome:
+		protocol.enviar_erro(conexao, 403)
+		return 403
+
+	if not os.path.isfile(caminho):
+		protocol.enviar_erro(conexao, 404)
+		return 404
 
 	tamanho = os.path.getsize(caminho)
-	hash_sha = hashlib.sha256()
 
-	protocol.enviar_inicio(conexao, protocol.Tipo.ARQUIVO, nome, tamanho)
+	conexao.sendall(protocol.montar_cabecalho(200, protocol.tipo_mime(nome), tamanho))
 
 	with open(caminho, "rb") as arquivo:
 		while True:
@@ -28,12 +30,9 @@ def enviar_arquivo(conexao, nome):
 			if not bloco:
 				break
 
-			hash_sha.update(bloco)
 			conexao.sendall(bloco)
 
-	protocol.enviar_mensagem(conexao, protocol.Tipo.HASH, nome, hash_sha.hexdigest())
-
-	return hash_sha.hexdigest()
+	return 200
 
 
 def atender_cliente(conexao, endereco):
@@ -55,14 +54,14 @@ def atender_cliente(conexao, endereco):
 
 		print(f"{endereco} {metodo} {caminho} {versao}")
 
-		corpo = (
-			"<html>\n"
-			" <head><title>Resposta Sucesso</title></head>\n"
-			" <body><h1>Arquivo entregue com sucesso!</h1></body>\n"
-			"</html>"
-		).encode("utf-8")
+		nome = protocol.extrair_nome(caminho)
 
-		conexao.sendall(protocol.montar_cabecalho(200, "text/html; charset=utf-8", len(corpo)) + corpo)
+		try:
+			status = enviar_arquivo(conexao, nome)
+			print(f"{endereco} {status} {protocol.FRASES_STATUS[status]}: {nome}")
+
+		except (ConnectionError, TimeoutError):
+			print(f"{endereco} desconectou durante o envio de {nome}")
 
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
