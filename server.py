@@ -7,21 +7,10 @@ HOST = "127.0.0.1"
 PORT = 8080
 
 
-def enviar_arquivo(conexao, nome):
-	pasta_arquivo = "files"
-	caminho = os.path.join(pasta_arquivo, nome)
-
-	if os.path.basename(nome) != nome:
-		protocol.enviar_erro(conexao, 403)
-		return 403
-
-	if not os.path.isfile(caminho):
-		protocol.enviar_erro(conexao, 404)
-		return 404
-
+def transmitir_arquivo(conexao, status, caminho):
 	tamanho = os.path.getsize(caminho)
 
-	conexao.sendall(protocol.montar_cabecalho(200, protocol.tipo_mime(nome), tamanho))
+	conexao.sendall(protocol.montar_cabecalho(status, protocol.tipo_mime(caminho), tamanho))
 
 	with open(caminho, "rb") as arquivo:
 		while True:
@@ -31,6 +20,27 @@ def enviar_arquivo(conexao, nome):
 				break
 
 			conexao.sendall(bloco)
+
+
+def enviar_arquivo(conexao, nome):
+	pasta_arquivo = "files"
+	caminho = os.path.join(pasta_arquivo, nome)
+
+	if os.path.basename(nome) != nome:
+		protocol.enviar_erro(conexao, 403)
+		return 403
+
+	if not os.path.isfile(caminho):
+		pagina_404 = os.path.join(pasta_arquivo, "404.html")
+
+		if os.path.isfile(pagina_404):
+			transmitir_arquivo(conexao, 404, pagina_404)
+		else:
+			protocol.enviar_erro(conexao, 404)
+
+		return 404
+
+	transmitir_arquivo(conexao, 200, caminho)
 
 	return 200
 
